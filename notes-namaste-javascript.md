@@ -704,7 +704,7 @@ Why we need to wrap all these statements together? We need to do so that we can 
 if (true)
 ```
 
-The console will throw an error where the if condition was written. And it would be a SyntaxError: Unexpected end of input. And that is because the if expects one statement at the same line where if was written.
+The console will throw an error where the if condition was written. And it would be a SyntaxError: Unexpected end of input. And that is because the if expects one statement at the same line where it was written.
 
 Example with a valid statement for the if condition:
 
@@ -1130,3 +1130,441 @@ The ability to use functions as values is known as first-class functions.
 first class functions are first-class citizens. When are used as values.
 
 If you change var keyword in a function for a let or const it behaves the same way as variables like they have the temporal dead zone.
+
+### Callback functions and event listeners
+
+When you pass a function to another function is known as callback function. It gives you access to the asynchronous world in a single threaded language.
+
+Example of a callback function:
+
+```js
+function x(y) {}
+x(function y() {});
+```
+
+In this example the 'x' function has the control to call 'y' in some part of its code
+
+How callback functions are used in asynchronous tasks?
+
+Example:
+
+```js
+setTimeout(function () {
+  console.log("timer");
+}, 5000);
+function x(y) {
+  console.log("x");
+  y();
+}
+x(function y() {
+  console.log("y");
+});
+```
+
+This code will run this way. First the setTimeout will grab the callback function and put it into another place attaching it the timer of 5000 milliseconds with it and after that 5000 milliseconds the callback function will be executed. But JavaScript won't wait for that to happen, it will go to the other line of code and it will execute the 'x' function and after that the 'y' function. So in the console will see x, then y and after 5 seconds timer printed in the console, in that order. So asynchronous operations doesn't block the main thread of execution and that is why it can go to other lines of code and execute synchronous operations without the need to wait, that is how asynchronous work. And what happens behind the scenes is that first in the call stack we will have the execution context of x and y and the global. Then after that everything get out of the call stack and the execution context of the callback function goes into the call stack.
+
+Everything gets executed inside the call stack, and that is known as the main thread. If something blocks the call stack that is known as blocking the main thread. That's why for operations that takes time to execute we use asynchronous code, to not block the main thread or the call stack.
+
+Let's take this example:
+
+```js
+document.getElementById("clickMe").addEventListener("click", function xyz() {
+  console.log("Button clicked");
+});
+```
+
+In this code we're targetting our button with the id of 'clickMe' and we're attaching an event listener of type 'click' to that button, so, whenever we click the button the addEventListener will trigger the callback function (event handler), but the callback function will be stored something else waiting for its invocation to to inside the call stack.
+
+Now, what if we wanted to count how many clicks we're making? We can use closures for that:
+
+```js
+function manyTimes() {
+  let count = 0;
+  document.getElementById("clickMe").addEventListener("click", function xyz() {
+    console.log("Button clicked");
+  });
+}
+manyTimes();
+```
+
+What happens here is that the callback function forms a closure with its outer scope, so, it kind of remembers the references in memory of the identifiers that its outer scope had. And whenever you click the button you'll be able to see how many times you have clicked the button. We can access the event listener inside our developer tools, and check what scopes are attached to it. For this callback function will be the closure that forms with its parent lexical environment and also the global window.
+
+Why do we need to remove event listeners? Event listeners are heavy and that means that take memory. So, the closure that was formed with the callback function of the event listener is not inside the call stack but that does not mean that is not in memory. It can't be removed because we need it because if a user wants to click the button we need that to make it work, so we don't know what the user will do. And that's the reason why event listeners are heavy. It is a good practice to free up the space from event listeners.
+
+### Event loop
+
+The main job of the call stack is to execute whatever comes inside. It doesn't wait for anything.
+
+What if we wanted to execute some task after 5 secs? We can't do that because it will start executing immediately. To make that happen we will need extra superpowers.
+
+The call stack is inside the JavaScript engine, and the JavaScript engine is inside the browser. The browser has timers, bluetooth functionalities, geo localization, local storage, and can connect with servers like the netflix servers to retrieve our favorite shows in our page. To access those functionalities it needs to have kind of a connection, and those connections are known as web APIs. setTimeouts are not part of JavaScript, as well for DOM APIs, fetch, local storage, console, location, etc. All of these are part of the superpowers of the browser. And the browser gives the superpowers to the JavaScript engine through the window keyword. So if you type window.setTimeout() in your JavaScript code it will give you access to the timer of the browser and since the window object is the global object you can access the superpowers by just typing just the function without the window keyword.
+
+Let's take an example with asynchronous operations:
+
+```js
+console.log("Start");
+setTimeout(function cb() {
+  console.log("Callback");
+}, 5000);
+console.log("End");
+```
+
+First whenever a program is run a global execution context is created, now then the execution line by line starts. First in the first line it encounters the 'console.log('Start');' which access the console web API that is passed to the window object to the JavaScript code. Then after that it encounters the setTimeout and will call the setTimeout web API provided by the browser and pass the functionalities through the window object. and it takes a callback function with a delay, and when it pass the callback to setTimeout API, it basically registers a callback and it registers the callback 'cb' and starts the timer of 5 secs at the same time. After that the JS engine moves to the next line and it encounters the next console.log('End'); and call the console API to log End to the console. After that the global execution context goes out of the stack, and as soon as the timer expires the callback function needs to be executed in the call stack, but how it goes there? Here the event loop and the callback queue come in the picture, and our callback goes to the callback queue after the timer has expired, and the job of the event loop is to check the callback queue and if it's a callback function there puts the callback function inside the call stack. The call stack executes the callback function and it starts executing the callback line by line and it encounters the console.log so it calls the console API and log 'Callback' to the console and then after that it finishes execution so there is no more code to execute, therefore, the execution context created for the callback now gets out of the call stack.
+
+Now let's add an example with an addEventListener:
+
+```js
+console.log("Start");
+document.getElementById("btn").addEventListener("click", function cb() {
+  console.log("callback");
+});
+console.log("End");
+```
+
+Whenever a JavaScript code is run a global execution context is created. So here it creates one. Then it starts executing the code line by line, and it encounters the 'console.log('start');', so, it calls the console web API and log that string to the console. In the next line it encounters the document.getElementById('btn').addEventListener('click',function cb () {console.log('Callback');});, so, the JS engine access the DOM API to fetch some button with the id of 'btn' and then it returns it, and about the addEventListener it registers a callback for the event of 'click', so, inside the web API environment a callback for that will be registered and will attached the event of click to that callback, and that's all, so we go to the next line and access the console API again to log 'End' in the console. After that there is no more code to execute so the global execution context pops off the stack. But the event handler will be inside the web APIs environment until we remove it explicitly or we close the browser. So, whenever a user clicks the button the callback with the event will be triggered and it will go inside the callback queue and the event loop will push that into the call stack since it's always tracking whatever enters the callback queue. Now the callback will create an execution context and it will get access to the console web API to log 'Callback' to the console. After that the execution context of that API will be removed from the call stack. The job of the event loop is to monitor the callback queue and also the call stack and whenever it sees that the call stack is empty and iside the callback queue finds a callback function, then it takes the callback and moves it into the call stack. Why do we need a callback queue? Well, suppose if a user clicks the button more than one time. All the callbacks will be inside the callback queue and the event loop will be checking if the call stack is empty and if it is and a function is inside the callback queue then it pushes that into the call stack, then the callback creates an execution context and it start executing the code line by line and after that it gets out of the call stack and the event loop notes that there is empty and is another callback inside the callback queue so it pushes into the call stack and the process continues.
+
+Let's take another example with the fetch API:
+
+```js
+console.log("Start");
+setTimeout(function cbT() {
+  console.log("CB setTimeout");
+}, 5000);
+fetch("https://api.netflix.com").then(function cbF() {
+  console.log("CB Netflix");
+});
+console.log("End");
+```
+
+This time in our code we have the setTimeout as well as the fetch functions. Fetch basically make API calls, and the function returns a promise, and we have to pass a callback function which will be executed once this promise is resolved.
+
+- First a global execution context is created and then the code starts executing line by line.
+- Then the JS engine finds the first line where a 'console.log('Start');' is located and access the console API to log the message in the console.
+- After that it finds the setTimeout and use the setTimeout API to grab the callback function and register it inside the web APIs environment with the timer.
+- After that it finds the fetch function and it uses the fetch API to grab the callback function inside the then function and registers it inside the web environment. The fetch function will make an API call to the netflix servers and the callback will be waiting until the servers return the data back to the function, so at that time the callback function will be ready to execute. But this callback won't go to the callback queue, it will go to the microtask queue and this has higher priority than the callback queue, and the event loop will be checking if the call stack is empty and either the microtask or the callback queue have callback functions inside, and if both of them have callback functions as said before it will take first the callback inside the microtask queue and push it into the call stack to be executed. Then the callback inside the callbac queue.
+- But there is still some code to excute, so it finds the console.log() and uses the console API to log the string into the console.
+- Then after that the global execution context pops off the call stack.
+- The event loop that's monitoring the call stack will check that the call stack is empty and then will look if there is something inside either the microtask queue or the callback queue, and it sees tha both have callbacks inside, so it chooses the one which is inside the microtask queue and push it into the call stack.
+- A new execution context is created and the callback function starts executing, so, console.log('CB Netflix'); prints the string to the console and the JS engine will note that there is no more code to execute so, the execution context will be popped off the stack.
+- The event loop will grab the callback from the callback queue and push it into the call stack.
+- A new execution context will be created and the code inside the function will start executing logging to the console the string, so then, the execution context will be popped off the call stack.
+
+Inside the microtask queue only callbacks that come through promises can be inside the microtask queue. And there is something known as the mutation observer, and this keeps checking whether is some mutation in the DOM tree or not, and if there is some mutation in the DOM tree it can execute some callback function. These two things: Callbacks that come through promises and the mutation observer callbacks can be inside the microtask queue.
+
+Let's suppose there are three callbacks pending to execute inside the microtask queue, and we have one callback inside the callback queue. The event loop will only execute the callback inside the callback queue once the threee callbacks from the microtask queue have been finished execution and popped off the call stack.
+
+Let's suppose there is one callback inside the microtask queue and another callback inside the callback queue. But what if the callback inside the micro task queue when it gets executed creates another callback queue, and the other creates another, and so on. The callback queue will get the state of starvation because doesn't get the chance to execute in a long time.
+
+### Higher order functions and functional programming
+
+A function that is passed to another function as an argument or return a function from it is known as higher order function.
+
+Let's take an example of a higher order function:
+
+```js
+function x() {
+  console.log("Namaste");
+}
+
+function y(x) {
+  x();
+}
+```
+
+Here in this code the function 'x' is being passed as an argument to the 'y' function. The 'y' function is a higher order function. X is the callback function.
+
+Let's take another example of an array that has the radius of four circles:
+
+```js
+const radius = [3, 1, 2, 4];
+
+const area = function (radius) {
+  const ouput = [];
+  for (let i = 0; i < radius.length; i++) {
+    output.push(Math.PI * radius[i] * radius[i]);
+  }
+  return output;
+};
+console.log(area(radius));
+```
+
+Here we calculate the area of four circles inside an array and we return an array with the areas.
+
+Another example for circumference:
+
+```js
+const radius = [3, 1, 2, 4];
+
+const circumference = function (radius) {
+  const ouput = [];
+  for (let i = 0; i < radius.length; i++) {
+    output.push(2 * Math.PI * radius[i]);
+  }
+  return output;
+};
+console.log(circumference(radius));
+```
+
+This function takes an array and returns the four circumferences.
+
+Another example for diameter:
+
+```js
+const radius = [3, 1, 2, 4];
+
+const diameter = function (radius) {
+  const ouput = [];
+  for (let i = 0; i < radius.length; i++) {
+    output.push(2 * radius[i]);
+  }
+  return output;
+};
+console.log(diameter(radius));
+```
+
+This function takes an array and returns the four diameters.
+
+People generally do that in interviews, and this is not a good way. Here we are repeating our code a lot and this goes against the DRY principle that stands for Don't Repeat Yourself. To solve this we can start to create a separate function that calculates and return the area.
+
+```js
+const radius = [3, 1, 2, 4];
+
+const area = function (radius) {
+  return Math.PI * radius * radius;
+};
+
+const circumference = function (radius) {
+  return Math.PI * 2 * radius;
+};
+
+const diameter = function (radius) {
+  return 2 * radius;
+};
+
+const calculate = function (radius, logic) {
+  const output = [];
+  for (let i = 0; i < radius.length; i++) {
+    output.push(logic(radius[i]));
+  }
+  return output;
+};
+
+console.log(calculate(radius, area));
+console.log(calculate(radius, circumference));
+console.log(calculate(redius, diameter));
+```
+
+This is a better way of calculate area, circumference and diameter without rewrite almost the same function three times! This is the beauty of functional programming, so you need to think in your head to make your logic inside functions. Why is this good? We extracted the logic to calculate the area, circumference and diameter of circles and put them inside their own function, and we create just one function to make the calculation with the foor loop for every value in the radius array. So, they are reusable and maintanable. Functional programming uses pure functions composition of functions, reusability, modularity, and a lot of other things.
+
+The calculate function that we just wrote before is just an implementation of the map function!
+
+```js
+console.log(radius.map(area));
+```
+
+This will give us the same result as our calculate function. Is what it does behind the scenes the map function.
+
+### Callback Hell
+
+Let's take an example of creating a cart for a e-commerce website:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+api.createOrder();
+api.proceedToPayment();
+```
+
+First we need to create an order, and then we need to proceed to payment, but how we can manage the asynchronous operations in order? Yes, we have to use the power of callbacks.
+
+So we wrap our APIs into functions:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+api.createOrder(cart, function () {
+  api.proceedToPayment();
+});
+```
+
+Here first the JS engine will start calling the createOrder API and it will create an order with the cart and will call the function we passed as a callback function back. It will be the responsibility of the createOrder API. So, we created an order, and after that we proceeded to payment, then after that maybe we have to show an order summary page, and for that we have another API called showOrderSummary:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+api.createOrder(cart, function () {
+  api.proceedToPayment(function () {
+    api.showOrderSummary();
+  });
+});
+```
+
+Now we give another callback function but this time to proceedToPayment API, now is the responsibility of proceedToPayment API to complete the payment and call the function back. That's how we can manage the execution of the whole flow which happens one after the other. So now, we have created the order, we have done the payment, and shown the order summary, and after that suppose if we want to update the wallet:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+api.createOrder(cart, function () {
+  api.proceedToPayment(function () {
+    api.showOrderSummary(function () {
+      api.updateWallet();
+    });
+  });
+});
+```
+
+Here we start to see a problem because an API starts to depend to another API and that API to depend to another one and so on, and what happens is that we end up falling in the callback hell. The callback hell is one callback inside another callback inside another one and so on, and the code starts to grow horizontally instead of vertically. And this code is no maintanable and unreadable. It is also known as pyramid of Doom.
+
+Inversion control: Is another problem that we see while using callbacks and kyle simpson explain very beautiful in you don't know js, so inversion of control is that you lose the control of your code when using callbacks:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+api.createOrder(cart, function () {
+  api.proceedToPayment();
+});
+```
+
+What we're doing here is that we take a callback and give it to createOrder API, and now we expect and trust blindly in createOrder API that at some point of time create an order and call our function back, and this is very risky because that is an important piece of code which is the proceed to payment. So whenever we pass a callback function to some other function we're giving the control of our function and we don't know what's happening behind the scenes.
+
+### Prototypal inheritance
+
+What is inheritance? Is when one object inherits the properties of its parent.
+
+Let's take an example:
+
+```js
+let arr = ["Akshay", "Aditya"];
+
+let object = {
+  name: "Akshay",
+  city: "Dehradun",
+  getIntro: function () {
+    console.log(this.name + "from" + this.city);
+  },
+};
+```
+
+Why do this array and this object have access to a lot of properties, and functions or methods? There is something known as prototype, so whenever you create a JavaScript object, JavaScript engine automatically without even letting you know attaches an object to your object allowing you to have access to properties and methods, and this applies to functions as well because a function is a special kind of object in JavaScript. If we want to access that hidden object we can access by doing this:
+
+```js
+let arr = ["Akshay", "Aditya"];
+
+let object = {
+  name: "Akshay",
+  city: "Dehradun",
+  getIntro: function () {
+    console.log(this.name + "from" + this.city);
+  },
+};
+function fun() {}
+
+arr.__proto__;
+object.__proto__;
+fun.
+```
+
+before two lines of the last line of our previous code is the JavaScript object where the JavaScript engine is putting all these functions or methods and properties. And before the last line also gives us access to properties and methods as well which is the prototype object, and the same happens with functions when you do fun.. Prototype is just as simple as that. Prototype is just an object that is attached to whatever object you create in JavaScript and gives you access to methods and properties using the dot notation.
+
+What is "arr.**proto**"? It is an object and it is the same as Array.prototype. Each and every object in JavaScript has a prototype.
+
+arr.**proto**.**proto**, this will point to the Object prototype.
+
+arr.**proto**.**proto**.**proto**, this will point to null.
+
+It is sort of a chain and everything finishes pointing to the Object.prototype. So this is where the saying of everything in JavaScript is nothing but an object comes. At the end of the prototype chain we find null.
+
+Why we call it proto? To not mess up the name of prototype by mistake when writing, and that's why they chose \_\_proto\_\_\
+
+### Promises
+
+Promises are used to handle async operations in JavaScript
+
+How things worked before promises?
+
+Let's take an example of building an e-commerce website like amazon:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+
+createOrder(cart); // orderId
+
+proceedToPayment(orderId);
+```
+
+So we have this code, we have in our cart those items, and we have two APIs, one to receive our orderId from the database and the other one for Proceed to the payment, these two APIs are asynchronous and are dependent on each other, and since they are asynchronous we don't know the time it will take for them. We can only proceed to payment once we have created the order.
+
+Example using callbacks:
+
+```js
+const cart = ["shoes", "pants", "kurta"];
+
+createOrder(cart, function () {
+  proceedToPayment(orderId);
+});
+```
+
+Here is the responsibility of createOrder API to create an order and then call our callback function back once the order is created with the id, and this is how people handled async operations using callbacks. But this has an important problem that is inversion control and in our code we have gave the control of our function proceedToPayment to some other API and we have no control of it and that's risky. With promises this is solved. So we can start designing our APIs this way:
+
+```js
+const promise = createOrder(cart);
+```
+
+So this code when the JavaScript engine executes the code it will return us a promise. and a promise is nothing but an empty object with some data value in it, and that data value will hold whatever the createOrder API return to us. And that is at first but the JavaScript engine will start executing code and after a time that empty object will be filled with data automatically, specifically to our problem with the orderDetails inside the data property. Now we need to attach a callback function to our promise and we need to use a then function for that.
+
+```js
+const promise = createOrder(cart);
+
+// promise at certain time = {data: orderDetails}
+promise.then(function (orderId) {
+  proceedToPayment(orderId);
+});
+```
+
+What improvements have we made? In the first solution without promises, we passed the function to the createOrder API and we were trusting blindly in createOrder API. In this new example we're attaching a callback function to a promise object. There is a difference because now we're attaching not passing the function, and this new example will give us the control of the program with us. It will create an order and fill the object with the data with the orderId and as soon as this promise object is filled with the data it will automatically call our callback function back, and will call our function once.
+
+If you want to see a promise object we will use a function fetch which is an API given by the browser to make API calls.
+
+```js
+const GITHUB_API = "https://api.github.com/users/akshaymarch7";
+
+const user = fetch(GITHUB_API);
+```
+
+Now we have this code and as soon as this code is executed we will get a promise object inside the user because fetch returns a promise. So we put a debugger in the line of the user and when we run the code the user was set to undefined in memory in the part of Script and when we run that line the user will have now a Promise object, and we can see a PromiseState as pending and a PromiseResult as undefined. PromiseResult will store the data that fetch method will return, and PromiseState tells you in what state the promise is, the first state will be pending and once we have the data the PromiseState will change to fulfilled state.
+
+```js
+const GITHUB_API = "https://api.github.com/users/akshaymarch7";
+
+const user = fetch(GITHUB_API);
+
+console.log(user);
+```
+
+If we add the 'console.log(user);' we can see the Promise object and it show us pending, but that is just an inconsistency in chrome browser. When that 'console.log(user);' is executed the user, the Promise object is in a pending state because JavaScript doesn't wait for asynchronous operations to finish, it will start execute line by line. And since the fetch method returns a Promise object it will get the data not instantly it will need to wait to fill the object with it. So if you open the object you will see that now the PromiseState is fulfilled so at certain point in time chrome browser will put fulfilled state because the user now has the data but when it was logged was in pending state. We can see the response we got back inside PromiseResult and inside body, but we cannot access just by expanding it, we need to use something else
+
+```js
+user.then(function (data) {
+  console.log(data);
+});
+```
+
+Now we would be able to see the Response object by attaching a callback to our Promise object. And that is how we handle promises
+
+This Promise object is a special object because JavaScript can guarantee that this object can only be resolved once either for a success or failure, so it can be rejected.
+
+Promise objects are immutable, whenever is fullfilled and whenever we have data inside our promise object we can be sure that the data will never be changed
+
+How can we answer the question what is a promise? Promise is a placeholder for a certain period of time until we receive a value from an asynchronous operation. The mdn says that is an object representing the eventual completion or failure of an asynchronous operation
+
+The callback hell can be resolved with promise chaining:
+
+```js
+createOrder(cart)
+  .then(function (orderId) {
+    return proceedToPayment(orderId);
+  })
+  .then(function (paymentInfo) {
+    return showOrderSummary(paymentInfo);
+  })
+  .then(function (paymentInfo) {
+    return updateWalletBalance(paymentInfo);
+  });
+```
+
+This is known as promise chaining. We need to add the return inside every then method to ensure that the value you're returning from the callback function is wrapped in a promise, so, if you don't use the return method the value wouldn't pass to the other then method and the chain wouldn't work as expected.
